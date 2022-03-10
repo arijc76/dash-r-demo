@@ -1,55 +1,47 @@
 library(dash)
-library(dashCoreComponents)
 library(dashHtmlComponents)
+library(dashCoreComponents)
 library(dashBootstrapComponents)
+
 library(ggplot2)
+library(dplyr)
+library(purrr)
 library(plotly)
 
-app <- Dash$new(external_stylesheets = dbcThemes$BOOTSTRAP)
+app <- Dash$new()
 
-msleep2 <- readr::read_csv(here::here('data', 'msleep.csv'))
+gap <- read.csv("data/gapminder_processed.csv")
 
 app$layout(
-    dbcContainer(
-        list(
-            htmlH1('Dashr heroky deployment'),
-            dccGraph(id='plot-area'),
-            htmlDiv(id='output-area'),
-            htmlBr(),
-            htmlDiv(id='output-area2'),
-            htmlBr(),
-            dccDropdown(
-                id='col-select',
-                options = msleep2 %>% colnames %>% purrr::map(function(col) list(label = col, value = col)),
-                value='bodywt')
-        )
+  dbcContainer(
+    list(
+      dccDropdown(
+        id = "year_input",
+        options = gap %>%
+          pull(year) %>%
+          unique() %>%
+          purrr::map(function(year) list(label = year, value = year)),
+        value = 1970
+      ),
+      dccGraph(id = "bubble_plot")
     )
+  )
 )
 
-app$callback(
-    output('plot-area', 'figure'),
-    list(input('col-select', 'value')),
-    function(xcol) {
-        p <- ggplot(msleep2) +
-            aes(x = !!sym(xcol),
-                y = sleep_total,
-                color = vore,
-                text = name) +
-            geom_point() +
-            scale_x_log10() +
-            ggthemes::scale_color_tableau()
-        ggplotly(p) %>% layout(dragmode = 'select')
-    }
+app %>% add_callback(
+  output("bubble_plot", "figure"),
+  input("year_input", "value"),
+  function(year_inp) {
+    gap_f <- filter(gap, year == year_inp)
+    p <- gap_f %>% 
+      ggplot(aes(
+        x = children_per_woman,
+        y = life_expectancy,
+        color = region,
+        size = population)) +
+      geom_point()
+    ggplotly(p)
+  }
 )
 
-app$callback(
-    list(output('output-area', 'children'),
-         output('output-area2', 'children')),
-    list(input('plot-area', 'selectedData'),
-         input('plot-area', 'hoverData')),
-    function(selected_data, hover_data) {
-        list(toString(selected_data), toString(hover_data))
-    }
-)
-
-app$run_server(host = '0.0.0.0')
+app$run_server(host = "0.0.0.0")
